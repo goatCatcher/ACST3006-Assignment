@@ -14,21 +14,11 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 
 In this question, we aim to analyze the optimal risky portfolio for two risky assets and study the relationship between the assets' correlation and the resulting possible portfolios. We will be using R to perform the calculations and visualize the results.
 
-#### Part a
 Firstly, using our portfolio means and sd, we can populate the table given using results given in the lectures.
 ```{r results='asis', echo=FALSE}
 library(knitr)
 library(kableExtra)
-library(dplyr)
-library(scales)
 source("~/Uni/ACST3006/Assignment/Scripts/Q1.R", echo=FALSE)
-# Assuming your data.table is named portfolio_weights_dt
-
-portfolio_stats_df <- portfolio_stats %>%
-  as.data.frame() %>%
-  mutate(across(starts_with("weight"), percent),
-         Return = percent(Return, accuracy = 0.01),
-         SD = percent(SD, accuracy = 0.1))
 
 formatted_table <- portfolio_stats_df %>%
   kable(format = "html", digits = 4, col.names = c("Weight Asset 1", "Weight Asset 2", "Portfolio Return", "Portfolio SD")) %>%
@@ -143,27 +133,63 @@ E(R_p) &= 0.004 + 0.1168026\times\sigma_{R_{p}}
 Plotting this, we get:
 
 ```{r, echo=FALSE}
-q1plot
+q1plot1
+```
+
+We can also graph the set of possible portfolios when correlation is as follows:
+```{r, echo=FALSE}
+q1plot2
+```
+
+### Question 2
+
+We are given the monthly return for stocks, U.S. portfolios and country portfolios.
+
+#### Part I
+Let us calculate the mean return, standard deviation, correlations and variances/covariances on all available stocks / portfolios
+
+```{r, echo=TRUE}
+stock_returns <- fread("Data/Q2.csv")
+
+# Manipulate Data ---------------------------------------------------------
+# Store the investment categories and investment types
+investment_categories <- as.character(unlist(stock_returns[1, ]))[-1]
+investment_types <- as.character(unlist(stock_returns[2, ]))[-1]
+stock_returns <- stock_returns[-c(1, 2)]
+colnames(stock_returns) <- c("Date", as.vector(investment_types))
+
+# Convert the data.table to long format using melt()
+stock_returns_melt <- melt(stock_returns, id.vars = "Date", variable.name = "Investment", value.name = "Return")
+stock_returns_melt[, Investment_Category := investment_categories[Investment], by = Investment]
+stock_returns_melt <- stock_returns_melt[, .(Investment, Investment_Category, Date, Return)][, Return := as.numeric(Return)]
+
+# Part I ------------------------------------------------------------------
+# Calculate mean return
+mean_returns <- stock_returns_melt[, .(Mean_Return = mean(Return)), by = .(Investment, Investment_Category)]
+sd_returns <- stock_returns_melt[, .(SD_Return = sd(Return)), by = .(Investment, Investment_Category)]
+risk_free_rate <- mean_returns[Investment == "US Riskfree", Mean_Return]
+
+# Calculate the covariances and correlations among risky assets
+risky_assets <- stock_returns_melt[Investment != "US Riskfree"]
+risky_assets_wide <- dcast(risky_assets, Date ~ Investment, value.var = "Return")
+
+# Remove the 'Date' column
+risky_assets_wide[, Date:=NULL]
+
+# Compute the covariance matrix
+cov_matrix <- cov(risky_assets_wide)
+
+# Compute the correlation matrix
+cor_matrix <- cor(risky_assets_wide)
+
+print(mean_returns)
+print(sd_returns)
+print(risk_free_rate)
+print(cov_matrix)
+print(cor_matrix)
+
+
 ```
 
 
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-We can find the optimal weights with:
-
-\begin{align}
-W^* = \begin{bmatrix}
-w_1^* \\
-w_2^*
-\end{bmatrix} &= V^{-1}
-\begin{bmatrix}
-E(\mathbf{R}), \mathbf{1} \end{bmatrix}\begin{bmatrix}
-C & -B \\
--B & A
-\end{bmatrix}\begin{bmatrix}
-E(R_p*) \\
-1
-\end{bmatrix}\frac{1}{D}\\
-\end{align}
 
