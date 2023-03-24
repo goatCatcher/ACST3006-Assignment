@@ -1,0 +1,169 @@
+---
+title: "ACST3006 Assignment"
+author: "Toby Burgess"
+date: '2023-03-23'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+## Introduction
+### Question 1
+
+In this question, we aim to analyze the optimal risky portfolio for two risky assets and study the relationship between the assets' correlation and the resulting possible portfolios. We will be using R to perform the calculations and visualize the results.
+
+#### Part a
+Firstly, using our portfolio means and sd, we can populate the table given using results given in the lectures.
+```{r results='asis', echo=FALSE}
+library(knitr)
+library(kableExtra)
+library(dplyr)
+library(scales)
+source("~/Uni/ACST3006/Assignment/Scripts/Q1.R", echo=FALSE)
+# Assuming your data.table is named portfolio_weights_dt
+
+portfolio_stats_df <- portfolio_stats %>%
+  as.data.frame() %>%
+  mutate(across(starts_with("weight"), percent),
+         Return = percent(Return, accuracy = 0.01),
+         SD = percent(SD, accuracy = 0.1))
+
+formatted_table <- portfolio_stats_df %>%
+  kable(format = "html", digits = 4, col.names = c("Weight Asset 1", "Weight Asset 2", "Portfolio Return", "Portfolio SD")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F) %>%
+  column_spec(1, bold = F, border_right = T) %>%
+  column_spec(2, bold = F, border_right = T) %>%
+  column_spec(3, bold = F, border_right = T) %>%
+  column_spec(4, bold = F)
+
+print(formatted_table)
+```
+Now to find the optimal risky portfolio, 
+
+\begin{equation}
+E(\mathbf{R}) = \begin{bmatrix}
+0.0015\\
+0.008
+\end{bmatrix}
+\end{equation}
+
+And:
+\begin{align}
+\text{Cov}(R_1, R_2) &= 0.4 \times 0.1 \times 0.05 \\
+                     &= 0.002
+\end{align}
+
+We calculate the covariance matrix as:
+\begin{equation}
+V = \begin{bmatrix}
+0.01 & 0.02 \\
+0.02 & 0.025
+\end{bmatrix}
+\end{equation}
+
+We get the inverse matrix as:
+
+\begin{equation}
+V^{-1} = \begin{bmatrix}
+119.0476 & -95.2381 \\
+-95.2381 & 476.1905
+\end{bmatrix}
+\end{equation}
+
+So, we can find:
+
+\begin{align}
+A &= \begin{bmatrix}
+0.0015\\
+0.008
+\end{bmatrix}'\begin{bmatrix}
+119.0476 & -95.2381 \\
+-95.2381 & 476.1905
+\end{bmatrix}^{-1}\begin{bmatrix}
+0.0015\\
+0.008
+\end{bmatrix} \\
+&= 0.03440476 \\
+B &= \begin{bmatrix}
+0.0015\\
+0.008
+\end{bmatrix}'\begin{bmatrix}
+119.0476 & -95.2381 \\
+-95.2381 & 476.1905
+\end{bmatrix}^{-1}\begin{bmatrix}
+1\\
+1
+\end{bmatrix} \\
+&= 3.404762 \\
+C &= \begin{bmatrix}
+1\\
+1
+\end{bmatrix}'\begin{bmatrix}
+119.0476 & -95.2381 \\
+-95.2381 & 476.1905
+\end{bmatrix}^{-1}\begin{bmatrix}
+1\\
+1
+\end{bmatrix}\\
+&= 404.7619 \\
+D &= \det\begin{bmatrix}
+A & B \\
+B & C
+\end{bmatrix}
+= AC - B^2 \\
+&=2.333333
+\end{align}
+
+The optimal return can be then found with:
+
+\begin{align}
+E(R_c) &= \frac{B\,E(R_{p^*})-A}{C\,E(R_{p^*})-B}\\
+E(R_{p^*}) &= \frac{B*0.004-A}{C*0.004-B} \\
+&= 1.164\%
+\end{align}
+
+And the standard deviation:
+
+\begin{align}
+\sigma_{R_p^*} &= (\frac{C\,\{E(R_p^*)\}^2-2\,B\,E(R_p^*) +A}{D})^{\frac{1}{2}}\\
+&=(\frac{C\,\{0.01164\}^2-2\,B\,\times0.01164 +A}{D})^{\frac{1}{2}} \\
+&= 0.06540948
+\end{align}
+
+
+Now we find the capital allocation line:
+
+\begin{align}
+E(R_p) &= E(R_p^Z) +\frac{D\,\sigma_{R_{p^*}}}{C\,E(R_{p^*})-B}\times\sigma_{R_{p}} \\
+E(R_p) &= 0.004 + 0.1168026\times\sigma_{R_{p}}
+\end{align}
+
+Plotting this, we get:
+
+```{r, echo=FALSE}
+q1plot
+```
+
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+We can find the optimal weights with:
+
+\begin{align}
+W^* = \begin{bmatrix}
+w_1^* \\
+w_2^*
+\end{bmatrix} &= V^{-1}
+\begin{bmatrix}
+E(\mathbf{R}), \mathbf{1} \end{bmatrix}\begin{bmatrix}
+C & -B \\
+-B & A
+\end{bmatrix}\begin{bmatrix}
+E(R_p*) \\
+1
+\end{bmatrix}\frac{1}{D}\\
+\end{align}
+
