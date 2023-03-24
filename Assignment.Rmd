@@ -139,6 +139,8 @@ q1plot1
 We can also graph the set of possible portfolios when correlation is as follows:
 ```{r, echo=FALSE}
 q1plot2
+# Clear the environment ready for question 2
+rm(list=ls())
 ```
 
 ### Question 2
@@ -188,8 +190,222 @@ print(risk_free_rate)
 print(cov_matrix)
 print(cor_matrix)
 
+```
+#### Part II
+
+To find the equation of the efficient frontier, we must:
+
+1. Filter the data set for country portfolios
+2. Calculate mean returns and covariance matrix
+3. Apply the formulas for A, B, C and D as above
+4. Apply the formula for the efficient frontier:
+
+\begin{align}
+Var(R_p) &= \frac{C\,\{E(R_p^*)\}^2-2\,B\,E(R_p^*) +A}{D}\\
+&= 29.5754\,\{E(R_p^*)\}^2-0.499E(R_p^*) + 0.00038
+\end{align}
+
+We can do this in R with the following code:
+
+```{r, echo=TRUE}
+# Filter the data to keep only the country portfolios
+country_portfolios <- risky_assets[Investment_Category == "Country Port"]
+
+# Calculate the mean returns and covariance matrix for the country portfolios
+mean_returns <- country_portfolios[, .(Mean_Return = mean(Return)), by = Investment]
+cov_matrix <- cov(country_portfolios[, dcast(.SD, Date ~ Investment, value.var = "Return")][, Date:=NULL])
+
+A <- t(mean_returns$Mean_Return) %*% solve(cov_matrix) %*% mean_returns$Mean_Return
+B <- t(rep(1, 6)) %*% solve(cov_matrix) %*% mean_returns$Mean_Return
+C <- t(rep(1, 6)) %*% solve(cov_matrix) %*% rep(1,6)
+D <- A * C - B^2
+
+# Define the function for the portfolio variance
+portfolio_variance <- function(E_Rp) {
+  return((C * E_Rp^2 - 2 * B * E_Rp + A) / D)
+}
+
+# Define the range of expected returns
+E_Rp_range <- seq(min(mean_returns$Mean_Return), max(mean_returns$Mean_Return), length.out = 500)
+
+# Calculate the portfolio variances
+portfolio_variances <- sapply(E_Rp_range, portfolio_variance)
+
+# Calculate the portfolio standard deviations (Sigmas)
+portfolio_sigmas <- sqrt(portfolio_variances)
+
+# Create a data frame with the expected returns and portfolio standard deviations
+efficient_frontier_data <- data.frame(E_Rp = E_Rp_range, Sigma = portfolio_sigmas)
 
 ```
+
+We can also find the Global Minimum Variance Portfolio, by applying the following R code:
+
+```{r, echo=TRUE}
+GMVP_Return <- B/C
+GMVP_Var <- 1/C
+GMVP_SD <- 1/sqrt(C)
+```
+
+```{r, echo=FALSE}
+cat("The Global Minimum Variance Portfolio Return is: ", GMVP_Return)
+cat("The Global Minimum Variance Portfolio Return is: ", GMVP_Var)
+cat("The Global Minimum Variance Portfolio Return is: ", GMVP_SD)
+```
+
+This information can be displayed in a graph as below:
+
+```{r, echo=FALSE}
+q2plot1 <- ggplot() +
+  geom_point(data = efficient_frontier_data, aes(x = Sigma, y = E_Rp), size = 0.5, color = "blue", alpha = 0.5) +
+  geom_point(aes(x = GMVP_SD, y = GMVP_Return), color = "red", size = 4) +
+  labs(x = "Portfolio Standard Deviation (Sigma)", y = "Portfolio Expected Return (E(R))",
+       title = "Efficient Frontier and Global Minimum Variance Portfolio") +
+  theme_minimal()
+
+print(q2plot1)
+```
+
+### Part 3
+We now consider an investor considering all country portfolio's, as well as the US risk-free portfolio.
+
+We can calculate the equation for the CML by using the formula for optimal return and capital allocation line as above:
+
+```{r, echo=TRUE}
+optimal_return <- (A-risk_free_rate*B)/(B-risk_free_rate*C)
+optimal_sd <- ((C*optimal_return^2-2*B*optimal_return+A)/D)^0.5
+
+cml_slope <- (D*optimal_sd)/(C*optimal_return-B)
+cml_intercept <- risk_free_rate
+```
+
+This gives us the following formula:
+\begin{align}
+E(R_p) &= 0.002955 + 0.2261123\times\sigma_{R_{p}}
+\end{align}
+
+Which can be graphed with the efficient frontier as below:
+```{r, echo=FALSE}
+cml_x <- seq(0, max(efficient_frontier_data$Sigma), 0.01)
+cml_y <- cml_intercept + as.vector(cml_slope) * cml_x
+cml_df <- data.frame(Return = cml_y, SD = cml_x)
+
+# Graph CML
+q2plot2 <- ggplot() +
+  geom_line(data = cml_df, aes(x = SD, y = Return), color = "black", size = 1) +
+  labs(x = "Portfolio Standard Deviation (Sigma)", y = "Portfolio Expected Return (E(R))",
+       title = "Capital Market Line") +
+  theme_minimal()
+
+print(q2plot2)
+```
+
+##### Market Price of Risk
+The market price of risk is defined as the slope of the Capital Market Line. In our case it is: `{r} cml_slope`
+In practice it is the risk premium per extra unit of risk. It quantifies the compensation investors can expect to receive for taking on additional risk. A higher market price of risk indicates that investors are demanding a higher return for taking on additional risk. Conversely, a lower market price of risk suggests that investors are willing to accept a lower return for bearing the same level of risk.
+
+##### Optimal Weights
+We can find the optimal weights of this portfolio with the formula as follows:
+
+\begin{align}
+W^* = \begin{bmatrix}
+w_1^* \\
+w_2^*
+  \end{bmatrix} &= V^{-1}
+\begin{bmatrix}
+E(\mathbf{R}), \mathbf{1} \end{bmatrix}\begin{bmatrix}
+C & -B \\
+-B & A
+\end{bmatrix}\begin{bmatrix}
+E(R_p*) \\
+1
+\end{bmatrix}\frac{1}{D}\\
+\end{align}
+
+In R:
+
+```{r, echo=TRUE}
+optimal_weights <- (solve(cov_matrix) %*% 
+                      matrix(c(mean_returns$Mean_Return, rep(1,nrow(mean_returns))), nrow=nrow(mean_returns)) %*%
+                      matrix(c(C, -B, -B, A), nrow=2) %*% 
+                      matrix(c(optimal_return, 1), nrow = 2))/rep(D, 6)
+```
+
+```{r, echo=FALSE}
+print(optimal_weights)
+```
+
+##### Portfolio Options
+We can calculate the composition of various portfolios
+
+```{r, echo=TRUE}
+portfolio_options <- data.table(`Risky Portfolio` = c(0, 300000, 500000), `Risk Free Portfolio` = c(500000, 200000, 0))
+
+portfolio_options[, `:=`(Return = `Risky Portfolio`*(1+optimal_return[1])+`Risk Free Portfolio`*(1+risk_free_rate), 
+             SD = sqrt(`Risky Portfolio`^2*optimal_sd[1]^2))]
+```
+
+
+```{r results='asis', echo=FALSE}
+portfolio_options <- portfolio_options[, lapply(.SD, function(x) scales::dollar(x))]
+
+formatted_table <- portfolio_options %>%
+  kable(format = "html", digits = 6, col.names = c("Risky Portfolio", "Risk Free Portfolio", "Return", "SD")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+print(formatted_table)
+```
+##### Security Market Line and Beta's
+We can calculate the Beta's for each portfolio as we know the mean returns ($R_i$), risk free rate ($R_f$) and market returns ($R_M$).
+
+$$\beta_{iM}=\frac{E(R_i)-E(R_f)}{E(R_M)-E(R_f)}, $$
+
+for each portfolio $i$
+
+
+```{r, echo=TRUE}
+mean_returns[, Beta:=(Mean_Return-risk_free_rate)/(optimal_return[1] - risk_free_rate)]
+
+# Find sml line
+sml_slope <- optimal_return - risk_free_rate
+sml_intercept <- risk_free_rate
+print(mean_returns)
+```
+
+We can plot this as:
+```{r, echo=FALSE}
+sml_x <- seq(0, 1.5, 0.01)
+sml_y <- sml_intercept + as.vector(sml_slope) * sml_x
+
+sml_df <- data.frame(Return = sml_y, SD = sml_x)
+
+# Plot line
+q2plot3 <- ggplot() +
+  geom_line(data = sml_df, aes(x = SD, y = Return), color = "blue", size = 1) +
+  labs(x = "Beta", y = "Portfolio Expected Return (E(R))",
+       title = "Security Market Line") +
+  theme_minimal()
+
+print(q2plot3)
+
+```
+
+##### Interpretting Beta Values
+The numerical beta values measure the systematic risk of an asset that cannot be diversified away. It is a measure of how the security / stock is correlated with the Market.
+For example, Australia's $\beta_{iM} = 0.52726$. This means that when the market index (in this case the portfolio of countries) increases by 10%, the Australian portfolio will increase by 5.2726% and vice versa.
+
+##### Example Portfolio
+If we now consider a portfolio with a covariance of 0.0045 with the market, we get the following return:
+```{r, echo=TRUE}
+return = risk_free_rate + (0.0045/optimal_sd^2)*(optimal_return - risk_free_rate)
+
+```
+
+```{r, echo=FALSE}
+cat("The return of this portfolio is:", return[1])
+```
+
+
 
 
 
